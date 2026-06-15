@@ -41,7 +41,10 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "622a633d-73a7-4fbb-a980-fec91950cbf9"
+      }
     },
     "owner": "gallat"
   }

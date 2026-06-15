@@ -1,0 +1,37 @@
+name: Build and distribute to Firebase App Distribution
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build-and-distribute:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Android APK with EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas build --profile preview --platform android --non-interactive --wait --json > eas-build.json
+
+      - name: Download APK
+        run: |
+          url=$(node -e "console.log(JSON.parse(require('fs').readFileSync('eas-build.json','utf8'))[0].artifacts.buildUrl)")
+          curl -sL "$url" -o capital-cities-trainer.apk
+
+      - name: Upload to Firebase App Distribution
+        uses: w9jds/firebase-action@master
+        with:
+          args: appdistribution:distribute capital-cities-trainer.apk --app 1:122328214776:android:bdc7df7d306c15a3c09f0d --groups testers --release-notes "Automated build from ${{ github.ref_name }}"
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
