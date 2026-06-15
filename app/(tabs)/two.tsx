@@ -46,6 +46,7 @@ export default function ReportScreen() {
   const { progress, loaded, reload, reset } = useProgress();
   const [filter, setFilter] = useState<ReportFilter>('all');
   const [sort, setSort] = useState<ReportSort>('accuracy');
+  const [revealedId, setRevealedId] = useState<string | null>(null);
 
   function handleReset() {
     Alert.alert(
@@ -149,10 +150,17 @@ export default function ReportScreen() {
           const trendChar = item.trend ? TREND_CHAR[item.trend] ?? '—' : '—';
           const trendStyle = item.trend ? styles[TREND_STYLE[item.trend]] : styles.trendStable;
           const dots: boolean[] = item.history.slice(-5);
+          const isRevealed = revealedId === item.verb.id;
           return (
-            <View style={styles.row}>
+            <Pressable
+              style={styles.row}
+              onPress={() => setRevealedId(isRevealed ? null : item.verb.id)}
+            >
               <View style={styles.rowMain}>
-                <Text style={styles.countryName}>{item.verb.country}</Text>
+                <Text style={styles.countryName}>
+                  {item.verb.country}
+                  {isRevealed ? <Text style={styles.capitalReveal}> — {item.verb.capital}</Text> : null}
+                </Text>
                 <Text style={[styles.statusBadge, styles[`status_${item.status}` as keyof typeof styles]]}>
                   {STATUS_LABEL[item.status] ?? item.status}
                 </Text>
@@ -174,7 +182,7 @@ export default function ReportScreen() {
                   </View>
                 ) : null}
               </View>
-            </View>
+            </Pressable>
           );
         }}
       />
@@ -396,6 +404,10 @@ const styles = StyleSheet.create({
   countryName: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  capitalReveal: {
+    fontWeight: '400',
+    color: '#0066cc',
   },
   statusBadge: {
     fontSize: 12,

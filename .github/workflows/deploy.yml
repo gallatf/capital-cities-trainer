@@ -22,7 +22,7 @@ jobs:
       - name: Build Android APK with EAS
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: npx eas build --profile preview --platform android --non-interactive --wait --json > eas-build.json
+        run: npx eas-cli@latest build --profile preview --platform android --non-interactive --wait --json > eas-build.json
 
       - name: Download APK
         run: |
