@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const STORAGE_KEY = 'capital-cities-progress';
 
@@ -22,20 +22,40 @@ export function useProgress() {
   const [progress, setProgress] = useState<Progress>({});
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
+  // Bumped on every save()/reset() so a reload() that was already in flight
+  // can detect it raced with a newer write and discard its (now stale) result
+  // instead of clobbering the freshly-saved progress.
+  const writeSeq = useRef(0);
+
+  const reload = useCallback(() => {
+    const seqAtStart = writeSeq.current;
+    return AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => {
-        if (raw) setProgress(JSON.parse(raw));
+        if (writeSeq.current !== seqAtStart) return;
+        setProgress(raw ? JSON.parse(raw) : {});
       })
       .finally(() => setLoaded(true));
   }, []);
 
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
   const save = useCallback((next: Progress) => {
+    writeSeq.current += 1;
     setProgress(next);
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {
       // offline/storage unavailable; in-memory state still works for this session
     });
   }, []);
 
-  return { progress, setProgress: save, loaded };
+  const reset = useCallback(() => {
+    writeSeq.current += 1;
+    setProgress({});
+    return AsyncStorage.removeItem(STORAGE_KEY).catch(() => {
+      // offline/storage unavailable; in-memory state still works for this session
+    });
+  }, []);
+
+  return { progress, setProgress: save, loaded, reload, reset };
 }

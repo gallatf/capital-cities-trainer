@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 
 import { Text, View } from '@/components/Themed';
 import FlashCard from '@/components/FlashCard';
@@ -11,9 +12,9 @@ import allEntries from '../../assets/data/capitals.json';
 type Filter = 'due' | 'difficult' | 'all';
 
 const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'all', label: 'All' },
   { key: 'due', label: 'Due' },
   { key: 'difficult', label: 'Difficult' },
-  { key: 'all', label: 'All' },
 ];
 
 const CONTINENTS: string[] = Array.from(
@@ -21,9 +22,18 @@ const CONTINENTS: string[] = Array.from(
 ).sort();
 
 export default function PracticeScreen() {
-  const { progress, setProgress, loaded } = useProgress();
-  const [filter, setFilter] = useState<Filter>('due');
+  const { progress, setProgress, loaded, reload } = useProgress();
+  const [filter, setFilter] = useState<Filter>('all');
   const [continents, setContinents] = useState<Set<string>>(new Set());
+
+  // Re-read progress from storage every time this tab gains focus, so a
+  // reset (or any other change) made on the Report tab isn't clobbered by
+  // this screen saving its own stale in-memory copy.
+  useFocusEffect(
+    useCallback(() => {
+      reload();
+    }, [reload])
+  );
 
   const entries = useMemo(() => {
     if (continents.size === 0) return allEntries as CapitalEntry[];

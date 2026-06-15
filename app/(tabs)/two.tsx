@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
-import { Dimensions, FlatList, Modal, Pressable, ScrollView, StyleSheet, View as RNView } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { Alert, Dimensions, FlatList, Modal, Pressable, ScrollView, StyleSheet, View as RNView } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 
 import { Text, View } from '@/components/Themed';
 import { useProgress } from '@/hooks/useProgress';
@@ -12,7 +13,7 @@ type ReportSort = 'accuracy' | 'country' | 'attempts';
 
 const REPORT_FILTERS: { key: ReportFilter; label: string }[] = [
   { key: 'difficult', label: 'Difficult' },
-  { key: 'practiced', label: 'All practiced' },
+  { key: 'practiced', label: 'Practiced' },
   { key: 'known', label: 'Known' },
   { key: 'all', label: 'All' },
 ];
@@ -42,9 +43,28 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function ReportScreen() {
-  const { progress, loaded } = useProgress();
+  const { progress, loaded, reload, reset } = useProgress();
   const [filter, setFilter] = useState<ReportFilter>('all');
   const [sort, setSort] = useState<ReportSort>('accuracy');
+
+  function handleReset() {
+    Alert.alert(
+      'Reset progress',
+      'This deletes all your practice history and starts from scratch. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reset', style: 'destructive', onPress: () => reset() },
+      ]
+    );
+  }
+
+  // Re-read progress from storage every time this tab gains focus, since the
+  // Practice tab stays mounted in the background and updates progress there.
+  useFocusEffect(
+    useCallback(() => {
+      reload();
+    }, [reload])
+  );
 
   if (!loaded) {
     return (
@@ -71,7 +91,11 @@ export default function ReportScreen() {
   else if (filter === 'practiced') rows = rows.filter((r) => r.seen > 0);
   else if (filter === 'known') rows = rows.filter((r) => r.seen > 0 && r.knew >= r.missed);
 
-  if (sort === 'accuracy') rows = [...rows].sort((a, b) => (a.accuracy ?? -1) - (b.accuracy ?? -1));
+  if (sort === 'accuracy') rows = [...rows].sort((a, b) => {
+    if (a.accuracy === null) return b.accuracy === null ? 0 : 1;
+    if (b.accuracy === null) return -1;
+    return a.accuracy - b.accuracy;
+  });
   else if (sort === 'country') rows = [...rows].sort((a, b) => a.verb.country.localeCompare(b.verb.country));
   else if (sort === 'attempts') rows = [...rows].sort((a, b) => b.seen - a.seen);
 
@@ -107,6 +131,9 @@ export default function ReportScreen() {
           prefix="Sort: "
           align="right"
         />
+        <Pressable style={styles.resetButton} onPress={handleReset}>
+          <Text style={styles.resetButtonText}>Reset</Text>
+        </Pressable>
       </View>
 
       {rows.length === 0 ? (
@@ -287,6 +314,18 @@ const styles = StyleSheet.create({
   },
   filterSelect: {
     flexShrink: 1,
+  },
+  resetButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#c62828',
+  },
+  resetButtonText: {
+    color: '#c62828',
+    fontWeight: '600',
+    fontSize: 13,
   },
   sortSelect: {
     borderColor: '#666',

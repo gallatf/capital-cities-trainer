@@ -189,7 +189,7 @@
 
   {"id": "australia", "country": "Australia", "capital": "Canberra", "continent": "Oceania", "difficulty": 1},
   {"id": "fiji", "country": "Fiji", "capital": "Suva", "continent": "Oceania", "difficulty": 2},
-  {"id": "kiribati", "country": "Kiribati", "capital": "Tarawa", "continent": "Oceania", "difficulty": 3},
+  {"id": "kiribati", "country": "Kiribati", "capital": "South Tarawa", "continent": "Oceania", "difficulty": 3},
   {"id": "marshall-islands", "country": "Marshall Islands", "capital": "Majuro", "continent": "Oceania", "difficulty": 3},
   {"id": "micronesia", "country": "Micronesia", "capital": "Palikir", "continent": "Oceania", "difficulty": 3},
   {"id": "nauru", "country": "Nauru", "capital": "Yaren", "continent": "Oceania", "difficulty": 3},
