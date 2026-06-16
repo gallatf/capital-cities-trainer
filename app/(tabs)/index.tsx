@@ -4,15 +4,12 @@ import { useFocusEffect } from 'expo-router';
 
 import { Text, View } from '@/components/Themed';
 import FlashCard from '@/components/FlashCard';
-import BatchSelectionScreen from '@/components/BatchSelectionScreen';
-import BatchStudyScreen from '@/components/BatchStudyScreen';
 import { useProgress } from '@/hooks/useProgress';
 import { useSession, recordResult, type CapitalEntry } from '@/hooks/useSession';
 import { filteredDeck, nextDueIn } from '@shared/logic.js';
 import allEntries from '../../assets/data/capitals.json';
 
 type Filter = 'due' | 'difficult' | 'all';
-type BatchMode = 'off' | 'selecting' | 'studying' | 'practicing';
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -29,11 +26,6 @@ export default function PracticeScreen() {
   const [filter, setFilter] = useState<Filter>('all');
   const [continents, setContinents] = useState<Set<string>>(new Set());
 
-  const [batchMode, setBatchMode] = useState<BatchMode>('off');
-  const [batchRegion, setBatchRegion] = useState('');
-  const [batchContinent, setBatchContinent] = useState('');
-  const [batchEntries, setBatchEntries] = useState<CapitalEntry[]>([]);
-
   useFocusEffect(
     useCallback(() => {
       reload();
@@ -45,14 +37,7 @@ export default function PracticeScreen() {
     return (allEntries as CapitalEntry[]).filter((e) => continents.has(e.continent));
   }, [continents]);
 
-  const sessionEntries = batchMode === 'practicing' ? batchEntries : activeEntries;
-  const sessionFilter = batchMode === 'practicing' ? 'all' : filter;
-  const { current, next, requeueCurrent } = useSession(sessionEntries, sessionFilter, progress);
-
-  const unseenCount = useMemo(
-    () => activeEntries.filter((e) => !progress[e.id] || progress[e.id].seen === 0).length,
-    [activeEntries, progress]
-  );
+  const { current, next, requeueCurrent } = useSession(activeEntries, filter, progress);
 
   if (!loaded) {
     return (
@@ -79,86 +64,6 @@ export default function PracticeScreen() {
     });
   }
 
-  function handleRegionSelect(region: string, continent: string, regionEntries: CapitalEntry[]) {
-    // Sort by difficulty (easiest first) so the list and practice start simple
-    const sorted = [...regionEntries].sort((a, b) => a.difficulty - b.difficulty);
-    setBatchRegion(region);
-    setBatchContinent(continent);
-    setBatchEntries(sorted);
-    setBatchMode('studying');
-  }
-
-  function exitBatch() {
-    setBatchMode('off');
-    setBatchRegion('');
-    setBatchContinent('');
-    setBatchEntries([]);
-  }
-
-  // --- Region selection ---
-  if (batchMode === 'selecting') {
-    return (
-      <View style={styles.container}>
-        <BatchSelectionScreen
-          entries={activeEntries}
-          progress={progress}
-          onSelect={handleRegionSelect}
-          onCancel={() => setBatchMode('off')}
-        />
-      </View>
-    );
-  }
-
-  // --- Study phase: list + map ---
-  if (batchMode === 'studying') {
-    return (
-      <View style={styles.container}>
-        <BatchStudyScreen
-          region={batchRegion}
-          continent={batchContinent}
-          entries={batchEntries}
-          onStartPractice={() => setBatchMode('practicing')}
-          onExit={exitBatch}
-        />
-      </View>
-    );
-  }
-
-  // --- Batch practice ---
-  if (batchMode === 'practicing') {
-    return (
-      <View style={styles.container}>
-        <View style={styles.batchHeader}>
-          <Text style={styles.batchHeaderTitle}>Practicing: {batchRegion}</Text>
-          <Pressable onPress={exitBatch}>
-            <Text style={styles.exitLink}>✕ Done</Text>
-          </Pressable>
-        </View>
-        <View style={styles.content}>
-          {current ? (
-            <FlashCard entry={current} onRate={handleRate} />
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.title}>Batch complete! 🎉</Text>
-              <Text style={styles.subtitle}>
-                You've practiced all {batchEntries.length} capitals from {batchRegion}.
-              </Text>
-              <View style={styles.emptyActions}>
-                <Pressable style={[styles.button, styles.buttonPrimary]} onPress={() => setBatchMode('selecting')}>
-                  <Text style={styles.buttonPrimaryText}>Learn another region</Text>
-                </Pressable>
-                <Pressable style={[styles.button, styles.buttonSecondary]} onPress={exitBatch}>
-                  <Text style={styles.buttonSecondaryText}>Back to all practice</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-        </View>
-      </View>
-    );
-  }
-
-  // --- Normal practice ---
   return (
     <View style={styles.container}>
       <View style={styles.continentToggle}>
@@ -195,11 +100,6 @@ export default function PracticeScreen() {
             </Text>
           </Pressable>
         ))}
-        {unseenCount > 0 && (
-          <Pressable style={[styles.filterButton, styles.learnButton]} onPress={() => setBatchMode('selecting')}>
-            <Text style={styles.learnButtonText}>Learn ({unseenCount})</Text>
-          </Pressable>
-        )}
       </View>
 
       <View style={styles.content}>
@@ -211,8 +111,6 @@ export default function PracticeScreen() {
             entries={activeEntries}
             progress={progress}
             onSetFilter={setFilter}
-            unseenCount={unseenCount}
-            onStartLearn={() => setBatchMode('selecting')}
           />
         )}
       </View>
@@ -225,15 +123,11 @@ function EmptyFilterState({
   entries,
   progress,
   onSetFilter,
-  unseenCount,
-  onStartLearn,
 }: {
   filter: Filter;
   entries: CapitalEntry[];
   progress: Parameters<typeof filteredDeck>[2];
   onSetFilter: (filter: Filter) => void;
-  unseenCount: number;
-  onStartLearn: () => void;
 }) {
   const nextDue = nextDueIn(progress);
   const nextDueText = nextDue ? `Next country due in ${nextDue}.` : null;
@@ -258,13 +152,6 @@ function EmptyFilterState({
   } else {
     message = 'No countries match this filter yet.';
     actions = [{ label: 'Show all countries', onPress: () => onSetFilter('all'), primary: true }];
-  }
-
-  if (unseenCount > 0) {
-    actions = [
-      { label: `Learn ${unseenCount} new countries by region`, onPress: onStartLearn, primary: true },
-      ...actions.map((a) => ({ ...a, primary: false })),
-    ];
   }
 
   return (
@@ -357,29 +244,6 @@ const styles = StyleSheet.create({
   },
   filterButtonTextActive: {
     color: '#fff',
-  },
-  learnButton: {
-    borderColor: '#2e7d32',
-    backgroundColor: '#2e7d32',
-  },
-  learnButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  batchHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 16,
-  },
-  batchHeaderTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  exitLink: {
-    fontSize: 13,
-    color: '#888',
   },
   emptyState: {
     alignItems: 'center',

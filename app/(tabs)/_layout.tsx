@@ -38,6 +38,15 @@ export default function TabLayout() {
         headerShown: false,
       }}>
       <Tabs.Screen
+        name="learn"
+        options={{
+          title: 'Learn',
+          tabBarIcon: ({ color }) => (
+            <TabIcon symbol="books.vertical" ionicon="book-outline" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
           title: 'Practice',
