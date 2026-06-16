@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -48,6 +48,14 @@ export default function FlashCard({ entry, onRate }: Props) {
 
   function handleReveal() {
     setRevealed(true);
+  }
+
+  function openMap() {
+    const q = encodeURIComponent(entry.capital + ', ' + entry.country);
+    const url = Platform.OS === 'ios' ? `maps:?q=${q}` : `geo:0,0?q=${q}`;
+    Linking.openURL(url).catch(() => {
+      Linking.openURL(`https://maps.google.com/?q=${q}`);
+    });
   }
 
   const panGesture = Gesture.Pan()
@@ -112,6 +120,10 @@ export default function FlashCard({ entry, onRate }: Props) {
           <View style={styles.answer}>
             <Text style={styles.capital}>{entry.capital}</Text>
             <Text style={styles.continent}>{entry.continent}</Text>
+
+            <Pressable style={styles.mapLink} onPress={openMap}>
+              <Text style={styles.mapLinkText}>📍 View on map</Text>
+            </Pressable>
 
             <View style={styles.ratingRow}>
               <Pressable style={[styles.button, styles.missedButton]} onPress={() => handleRate(false)}>
@@ -181,6 +193,15 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 13,
     opacity: 0.5,
+  },
+  mapLink: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  mapLinkText: {
+    fontSize: 14,
+    color: '#0066cc',
+    opacity: 0.8,
   },
   button: {
     paddingVertical: 14,
