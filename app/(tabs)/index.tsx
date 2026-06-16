@@ -4,14 +4,15 @@ import { useFocusEffect } from 'expo-router';
 
 import { Text, View } from '@/components/Themed';
 import FlashCard from '@/components/FlashCard';
-import StudyCard from '@/components/StudyCard';
+import BatchSelectionScreen from '@/components/BatchSelectionScreen';
+import BatchStudyScreen from '@/components/BatchStudyScreen';
 import { useProgress } from '@/hooks/useProgress';
 import { useSession, recordResult, type CapitalEntry } from '@/hooks/useSession';
 import { filteredDeck, nextDueIn } from '@shared/logic.js';
 import allEntries from '../../assets/data/capitals.json';
 
 type Filter = 'due' | 'difficult' | 'all';
-type BatchMode = 'off' | 'studying' | 'practicing';
+type BatchMode = 'off' | 'selecting' | 'studying' | 'practicing';
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -23,45 +24,15 @@ const CONTINENTS: string[] = Array.from(
   new Set((allEntries as CapitalEntry[]).map((e) => e.continent))
 ).sort();
 
-const BATCH_SIZE = 7;
-
-function pickStudyBatch(
-  entries: CapitalEntry[],
-  progress: Record<string, { seen: number }>,
-): { continent: string; batch: CapitalEntry[] } | null {
-  const unseen = entries.filter((e) => !progress[e.id] || progress[e.id].seen === 0);
-  if (unseen.length === 0) return null;
-
-  // Group by continent, pick the one with the most unseen entries
-  const byContinent = new Map<string, CapitalEntry[]>();
-  for (const e of unseen) {
-    if (!byContinent.has(e.continent)) byContinent.set(e.continent, []);
-    byContinent.get(e.continent)!.push(e);
-  }
-
-  let bestContinent = '';
-  let bestGroup: CapitalEntry[] = [];
-  for (const [cont, group] of byContinent) {
-    if (group.length > bestGroup.length) {
-      bestContinent = cont;
-      bestGroup = group;
-    }
-  }
-
-  // Take up to BATCH_SIZE, easiest first
-  const sorted = [...bestGroup].sort((a, b) => a.difficulty - b.difficulty);
-  return { continent: bestContinent, batch: sorted.slice(0, BATCH_SIZE) };
-}
-
 export default function PracticeScreen() {
   const { progress, setProgress, loaded, reload } = useProgress();
   const [filter, setFilter] = useState<Filter>('all');
   const [continents, setContinents] = useState<Set<string>>(new Set());
 
   const [batchMode, setBatchMode] = useState<BatchMode>('off');
-  const [batchContinent, setBatchContinent] = useState<string>('');
+  const [batchRegion, setBatchRegion] = useState('');
+  const [batchContinent, setBatchContinent] = useState('');
   const [batchEntries, setBatchEntries] = useState<CapitalEntry[]>([]);
-  const [studyIndex, setStudyIndex] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -74,10 +45,8 @@ export default function PracticeScreen() {
     return (allEntries as CapitalEntry[]).filter((e) => continents.has(e.continent));
   }, [continents]);
 
-  // During batch practice, restrict the session to batch entries only
   const sessionEntries = batchMode === 'practicing' ? batchEntries : activeEntries;
   const sessionFilter = batchMode === 'practicing' ? 'all' : filter;
-
   const { current, next, requeueCurrent } = useSession(sessionEntries, sessionFilter, progress);
 
   const unseenCount = useMemo(
@@ -110,62 +79,57 @@ export default function PracticeScreen() {
     });
   }
 
-  function startBatch() {
-    const result = pickStudyBatch(activeEntries, progress);
-    if (!result) return;
-    setBatchContinent(result.continent);
-    setBatchEntries(result.batch);
-    setStudyIndex(0);
+  function handleRegionSelect(region: string, continent: string, regionEntries: CapitalEntry[]) {
+    // Sort by difficulty (easiest first) so the list and practice start simple
+    const sorted = [...regionEntries].sort((a, b) => a.difficulty - b.difficulty);
+    setBatchRegion(region);
+    setBatchContinent(continent);
+    setBatchEntries(sorted);
     setBatchMode('studying');
-  }
-
-  function handleStudyNext() {
-    if (studyIndex < batchEntries.length - 1) {
-      setStudyIndex((i) => i + 1);
-    } else {
-      setBatchMode('practicing');
-    }
   }
 
   function exitBatch() {
     setBatchMode('off');
+    setBatchRegion('');
     setBatchContinent('');
     setBatchEntries([]);
-    setStudyIndex(0);
   }
 
-  // --- Batch study phase ---
-  if (batchMode === 'studying') {
+  // --- Region selection ---
+  if (batchMode === 'selecting') {
     return (
       <View style={styles.container}>
-        <View style={styles.batchHeader}>
-          <Text style={styles.batchHeaderTitle}>Learning: {batchContinent}</Text>
-          <Text style={styles.batchHeaderSub}>
-            Study these {batchEntries.length} capitals, then practice them
-          </Text>
-          <Pressable onPress={exitBatch}>
-            <Text style={styles.exitLink}>✕ Exit</Text>
-          </Pressable>
-        </View>
-        <View style={styles.content}>
-          <StudyCard
-            entry={batchEntries[studyIndex]}
-            index={studyIndex}
-            total={batchEntries.length}
-            onNext={handleStudyNext}
-          />
-        </View>
+        <BatchSelectionScreen
+          entries={activeEntries}
+          progress={progress}
+          onSelect={handleRegionSelect}
+          onCancel={() => setBatchMode('off')}
+        />
       </View>
     );
   }
 
-  // --- Batch practice phase ---
+  // --- Study phase: list + map ---
+  if (batchMode === 'studying') {
+    return (
+      <View style={styles.container}>
+        <BatchStudyScreen
+          region={batchRegion}
+          continent={batchContinent}
+          entries={batchEntries}
+          onStartPractice={() => setBatchMode('practicing')}
+          onExit={exitBatch}
+        />
+      </View>
+    );
+  }
+
+  // --- Batch practice ---
   if (batchMode === 'practicing') {
     return (
       <View style={styles.container}>
         <View style={styles.batchHeader}>
-          <Text style={styles.batchHeaderTitle}>Practicing: {batchContinent}</Text>
-          <Text style={styles.batchHeaderSub}>{batchEntries.length} capitals from the study batch</Text>
+          <Text style={styles.batchHeaderTitle}>Practicing: {batchRegion}</Text>
           <Pressable onPress={exitBatch}>
             <Text style={styles.exitLink}>✕ Done</Text>
           </Pressable>
@@ -175,13 +139,13 @@ export default function PracticeScreen() {
             <FlashCard entry={current} onRate={handleRate} />
           ) : (
             <View style={styles.emptyState}>
-              <Text style={styles.title}>Batch complete!</Text>
+              <Text style={styles.title}>Batch complete! 🎉</Text>
               <Text style={styles.subtitle}>
-                You've practiced all {batchEntries.length} capitals from {batchContinent}.
+                You've practiced all {batchEntries.length} capitals from {batchRegion}.
               </Text>
               <View style={styles.emptyActions}>
-                <Pressable style={[styles.button, styles.buttonPrimary]} onPress={startBatch}>
-                  <Text style={styles.buttonPrimaryText}>Learn next batch</Text>
+                <Pressable style={[styles.button, styles.buttonPrimary]} onPress={() => setBatchMode('selecting')}>
+                  <Text style={styles.buttonPrimaryText}>Learn another region</Text>
                 </Pressable>
                 <Pressable style={[styles.button, styles.buttonSecondary]} onPress={exitBatch}>
                   <Text style={styles.buttonSecondaryText}>Back to all practice</Text>
@@ -232,7 +196,7 @@ export default function PracticeScreen() {
           </Pressable>
         ))}
         {unseenCount > 0 && (
-          <Pressable style={[styles.filterButton, styles.learnButton]} onPress={startBatch}>
+          <Pressable style={[styles.filterButton, styles.learnButton]} onPress={() => setBatchMode('selecting')}>
             <Text style={styles.learnButtonText}>Learn ({unseenCount})</Text>
           </Pressable>
         )}
@@ -242,7 +206,14 @@ export default function PracticeScreen() {
         {current ? (
           <FlashCard entry={current} onRate={handleRate} />
         ) : (
-          <EmptyFilterState filter={filter} entries={activeEntries} progress={progress} onSetFilter={setFilter} unseenCount={unseenCount} onStartBatch={startBatch} />
+          <EmptyFilterState
+            filter={filter}
+            entries={activeEntries}
+            progress={progress}
+            onSetFilter={setFilter}
+            unseenCount={unseenCount}
+            onStartLearn={() => setBatchMode('selecting')}
+          />
         )}
       </View>
     </View>
@@ -255,20 +226,20 @@ function EmptyFilterState({
   progress,
   onSetFilter,
   unseenCount,
-  onStartBatch,
+  onStartLearn,
 }: {
   filter: Filter;
   entries: CapitalEntry[];
   progress: Parameters<typeof filteredDeck>[2];
   onSetFilter: (filter: Filter) => void;
   unseenCount: number;
-  onStartBatch: () => void;
+  onStartLearn: () => void;
 }) {
   const nextDue = nextDueIn(progress);
   const nextDueText = nextDue ? `Next country due in ${nextDue}.` : null;
 
   let message: string;
-  let actions: { label: string; filter?: Filter; onPress: () => void; primary: boolean }[];
+  let actions: { label: string; onPress: () => void; primary: boolean }[];
 
   if (filter === 'due') {
     message = 'All caught up!';
@@ -291,7 +262,7 @@ function EmptyFilterState({
 
   if (unseenCount > 0) {
     actions = [
-      { label: `Learn ${unseenCount} new countries by region`, onPress: onStartBatch, primary: true },
+      { label: `Learn ${unseenCount} new countries by region`, onPress: onStartLearn, primary: true },
       ...actions.map((a) => ({ ...a, primary: false })),
     ];
   }
@@ -397,23 +368,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   batchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingBottom: 16,
-    gap: 4,
   },
   batchHeaderTitle: {
     fontSize: 18,
     fontWeight: '700',
   },
-  batchHeaderSub: {
-    fontSize: 13,
-    opacity: 0.55,
-    textAlign: 'center',
-  },
   exitLink: {
     fontSize: 13,
     color: '#888',
-    marginTop: 4,
   },
   emptyState: {
     alignItems: 'center',

@@ -7,7 +7,10 @@ export type CapitalEntry = {
   country: string;
   capital: string;
   continent: string;
+  region: string;
   difficulty: number;
+  lat: number;
+  lng: number;
 };
 
 type Filter = 'all' | 'new' | 'difficult' | 'due';
